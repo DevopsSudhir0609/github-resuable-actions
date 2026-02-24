@@ -1,0 +1,72 @@
+name: deployment
+on: 
+   workflow_call:
+      inputs:
+         component:            # resusbale actions needd to define the "inputs" in the workflow_call
+            required: true        # this need to be call in the main workflow "Inputs_name"
+                                    # this whole section is used to pass the inputs to the reusable actions in 
+                                    # deployment.yml file
+            type: string
+            default: cart
+         env:
+            required: true
+            type: string
+            default: dev
+jobs:
+  Dev:
+    runs-on: self-hosted
+    environment: Dev
+    steps:
+    - name: checkout helm chart
+      uses: actions/checkout@v4
+    - name: azure login
+      uses:  azure/login@v1
+      with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          repository: DevopsSudhir0609/Kubernetes
+          path: Helm-charts/${{ inputs.component }}
+        
+      
+    - name: get aks credentials
+      run: az aks get-credentials --resource-group rg-aks --name aks-cluster --overwrite-existing
+      
+    - name: deploy helm chart
+      run: |
+        helm repo add myrepo https://github.com/DevopsSudhir0609/Kubernetes.git
+        helm repo update
+        cd ${{ input.component }}/kubernetes/Helm/chart
+        helm upgrade --install ${{ input.component }}        
+
+          
+    
+      
+
+ 
+  QA:
+    runs-on: self-hosted
+    environment: Qa
+    needs: Dev
+    steps:
+     - run: echo QA
+
+
+  UAT:
+   runs-on: self-hosted
+   environment: uat
+   needs: QA
+   steps:
+     - run: echo UAT
+  
+  Prod:
+   runs-on: self-hosted
+   environment: Prod
+   needs: UAT
+   steps:
+    - name: prod
+      run: echo prod
+
+ 
+ 
+
+
+

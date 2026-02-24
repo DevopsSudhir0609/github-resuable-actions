@@ -1,0 +1,76 @@
+#we installed the sonar client in github runner, 
+# next part code scanning i wriitten those steps in on note check their
+
+
+name: CI pipeline
+on: 
+   workflow_call:
+      inputs:                # resusbale actions needed to define the "inputs" in the workflow_call
+         required: true        # this need to be call in the main workflow "Inputs_name"
+                                    # this whole section is used to pass the inputs to the reusable actions in 
+                                    # deployment.yml file
+         component:
+            required: true
+            type: string
+            default: cart
+         appType:
+            required: true
+            type: string
+           
+jobs:
+  code-checkout:
+    runs-on: self-hosted
+    steps:
+        - name: checkout helm chart
+          uses: actions/checkout@v4
+          with:
+          repository: DevopsSudhir0609/Kubernetes
+          path: Helm-charts/${{ inputs.component }} # in this {{ inputs.component }} is nothing but to use calling helm directory in the workflow inside that cart, 
+          # catalogue, shipping, payment, frontend, user, mongodb, mysql, rabbitmq, redis, payment, shipping
+          # in this case we are using cart as input component and it will checkout the directory of cart in the helm chart folder
+          
+          id: sonarqube-token # in this i have to store sonar qube token to githubactions other wise it throw error 
+          run: |
+            echo "sonarqube token"
+            echo "sonar_token=${{ secrets.SONAR_TOKEN }}" >> $GITHUB_ENV
+            echo "sonar_host=${{ secrets.SONAR_HOST }}" >> $GITHUB_ENV
+         
+  app-dependcies:          
+     runs-on: self-hosted
+     needs: code-checkout
+     steps: 
+        - name: download Dependencies
+          run: |                            #why we using {{ inputs.component }} in the workflow_call is to pass the inputs to the reusable actions at top Apptype 
+            if [ ${{ inputs.component }} == "maven" ]; then  
+               mvn clean package
+            elif [ ${{ inputs.component }}== "nodejs" ]; then
+               npm install
+            elif [ ${{ inputs.component }}== "python" ]; then
+               pip install -r requirements.txt
+            fi
+
+  
+  build-container-image:
+    runs-on: self-hosted
+    needs: app-dependcies
+    steps:
+        - name: build container image
+          run: |
+           docker build -t  Githubactions.azure.io/.${{ inputs.component }}:${{ github.sha }} . # this is used to build the container image and push it to the docker hub
+            
+
+  push-container-image:
+    runs-on: self-hosted
+    needs: build-container-image
+    steps:
+        - name: login to Azure Container Registry
+          uses: azure/docker-login@v1
+          with:
+            credentials: ${{ secrets.AZURE_CREDENTIALS }} # this is used to login to the azure container registry
+          
+        - name: push container image
+          run: |
+            docker push Githubactions.azure.io/.${{ inputs.component }}:${{ github.sha }} # this is used to push the container image to the docker hub
+  
+  
+
